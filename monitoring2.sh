@@ -13,13 +13,13 @@ MEM_PRC=$(free | grep "Mem:" | awk '{printf("%.2f", $3/$2*100)}')
 
 DISK_SIZE=$(df -h --total --output=size | awk 'END {print $1}')
 
-USED_DISK=$(df -BM | grep '^/dev/' | grep -v '/boot$' | awk '{ud += $3} END {print ud}')
+USED_DISK=$(df -h --total | grep 'total' | awk '{printf("%d", $3)}')
 
-DISK_PRC=$(df -BM | grep '^/dev/' | grep -v '/boot$' | awk '{ut += $3} {ft+= $2} END {printf("%d"), ut/ft*100}')
+DISK_PRC=$(df -h --total | grep 'total' | awk 'END {print $NF}')
 
-CPU_LOAD=$(top -bn1 | grep '^%Cpu' | cut -c 9- | xargs | awk '{printf("%.1f%%"), $1 + $3}')
+CPU_LOAD=$(mpstat | grep 'all' | awk '{printf("%.2f%%", 100.00 - $NF)}')
 
-LAST_BOOT=$(who -b | awk '$1 == "system" {printf("%s %s"), $3, $4}')
+LAST_BOOT=$(who -b | awk '{printf("%s %s"), $3, $4}')
 
 LVM_USE=$(if [ $(lsblk | grep "lvm" | wc -l) -eq 0 ]; then echo no; else echo yes; fi)
 
