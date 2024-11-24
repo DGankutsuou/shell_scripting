@@ -1,74 +1,32 @@
-#!/bin/bash #>> you are telling your environment/ os to use bash as a command interpreter
-arc=$(uname -a) #uname displays information about the system and -a means all information
+#!/bin/bash
 
+#Make sure to install sysstat via `sudo apt install sysstat`
+#Make sure to install bc via `sudo apt install bc`
+#Make sure to write the path to the sudo log files you created in last line instead of `/var/log/sudo/sudo_logs`
 
-#grep or "global regular expression print” is a command used in searching
-#and matching text files contained in the regular expressions
+THREADS=$(lscpu | egrep 'Thread|Core|Socket|^CPU' | awk '{if(NR == 3) print $NF}')
+CORES=$(lscpu | egrep 'Thread|Core|Socket|^CPU' | awk '{if(NR == 4) print $NF}')
+SOCKETS=$(lscpu | egrep 'Thread|Core|Socket|^CPU' | awk '{if(NR == 5) print $NF}')
 
-#awk is a kind of super command with which you can do many things
-#for example awk '{ print $2; }' prints the second field of each line
+TOTAL_MEMORY=$(vmstat -s | awk '{if(NR == 1) print$1}')
+USED_MEMORY=$(vmstat -s | awk '{if(NR == 2) print$1}')
+USED_MEMORY_PERCENT=$(expr $USED_MEMORY \* 100 / $TOTAL_MEMORY)
 
-#The /proc/cpuinfo command provides information about
-pcpu=$(grep "physical id" /proc/cpuinfo | sort | uniq | wc -l)
+CPU_IDLE=$(mpstat | awk 'END{print $NF}')
 
-vcpu=$(grep "^processor" /proc/cpuinfo | wc -l) #Provides each processor with an identifying number.
-						#If you have one processor it will display a 0.
-						#If you have more than one processor it will display
-						#all processor information separately counting the processors
-						#using zero notation.
+TOTAL_DISK_SIZE=$(df -h --total --output=size| awk 'END{print$NF}')
+USED_DISK_SIZE=$(df -h --total --output=used | awk 'END{print$NF}')
+USED_DISK_PERCENT=$(df -h --total | awk 'END{print$(NF - 1)}')
 
-#The free command provides information about the total amount of the physical and
-#swap memory, as well as the free and used memory
-# -m displays the amount of memory in mebibytes
-fram=$(free -m | awk '$1 == "Mem:" {print $2}') #Display the free/unused memory
-
-uram=$(free -m | awk '$1 == "Mem:" {print $3}') #Diplay the used memory
-
-pram=$(free | awk '$1 == "Mem:" {printf("%.2f"), $3/$2*100}') #Display the usage rate as a percentage
-
-
-#The df command (short for disk free), is used to display information related to
-# file systems about total space and available space.
-fdisk=$(df -BG | grep '^/dev/' | grep -v '/boot$' | awk '{ft += $2} END {print ft}')
-
-udisk=$(df -BM | grep '^/dev/' | grep -v '/boot$' | awk '{ut += $3} END {print ut}')
-
-pdisk=$(df -BM | grep '^/dev/' | grep -v '/boot$' | awk '{ut += $3} {ft+= $2} END {printf("%d"), ut/ft*100}')
-
-
-cpul=$(top -bn1 | grep '^%Cpu' | cut -c 9- | xargs | awk '{printf("%.1f%%"), $1 + $3}')
-
-
-lb=$(who -b | awk '$1 == "system" {print $3 " " $4}')
-
-
-#here the goal is to know if your VM has dynamic partitions.
-#so if you have more than 0 partitions when you type the lsblk command
-#then you can display "yes
-lvmu=$(if [ $(lsblk | grep "lvm" | wc -l) -eq 0 ]; then echo no; else echo yes; fi)
-
-ctcp=$(ss -neopt state established | wc -l)
-
-ulog=$(users | wc -w)
-
-#hostname command displays the system hostname
-ip=$(hostname -I) # -I is used to get all IP(network) addresses
-
-mac=$(ip link show | grep "ether" | awk '{print $2}')
-
-cmds=$(journalctl _COMM=sudo | grep COMMAND | wc -l)
-
-#here you will call all the variables that you created above
-#and display eveything in an aesthetic way
-wall "	#Architecture: $arc
-	#CPU physical: $pcpu
-	#vCPU: $vcpu
-	#Memory Usage: $uram/${fram}MB ($pram%)
-	#Disk Usage: $udisk/${fdisk}Gb ($pdisk%)
-	#CPU load: $cpul
-	#Last boot: $lb
-	#LVM use: $lvmu
-	#Connections TCP: $ctcp ESTABLISHED
-	#User log: $ulog
-	#Network: IP $ip ($mac)
-	#Sudo: $cmds cmd"
+printf "#Architecture: `uname -a` \n"
+printf "#CPU physical: `nproc` \n"
+printf "#vCPU: `expr $THREADS \* $CORES \* $SOCKETS` \n"
+printf "#Memory Usage: `expr $USED_MEMORY / 1024`/`expr $TOTAL_MEMORY / 1024`MB ($USED_MEMORY_PERCENT%%) \n"
+printf "#Disk Usage: $USED_DISK_SIZE/$TOTAL_DISK_SIZE ($USED_DISK_PERCENT%)\n"
+printf "#CPU Load: `echo 100 - $CPU_IDLE | bc`%% \n"
+printf "#Last Boot: `who -b | awk '{print $(NF - 1), $NF}'` \n"
+printf "#LVM use: yes \n"
+printf "#Connexions TCP: `netstat -ant | grep ESTABLISHED | wc -l` ESTABLISHED \n"
+printf "#User Log: `who | wc -l` \n"
+printf "#Network: IP `hostname -I` (`ip addr | grep link/ether | awk '{print $(NF -2)}'`) \n"
+printf "#Sudo: `cat /var/log/sudo/sudo_logs | grep COMMAND | wc -l` cmd" 
