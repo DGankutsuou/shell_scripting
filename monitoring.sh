@@ -1,32 +1,29 @@
-#!/bin/bash
+#!bin/bash
 
-#Make sure to install sysstat via `sudo apt install sysstat`
-#Make sure to install bc via `sudo apt install bc`
-#Make sure to write the path to the sudo log files you created in last line instead of `/var/log/sudo/sudo_logs`
+USED_MEM=`free -m | grep 'Mem:' | awk '{printf("%d/%dMB", $3, $2)}'`
+MEM_USAGE=`free -m | grep 'Mem:' | awk '{printf("%.2f%%", $3 / $2 * 100)}'`
 
-THREADS=$(lscpu | egrep 'Thread|Core|Socket|^CPU' | awk '{if(NR == 3) print $NF}')
-CORES=$(lscpu | egrep 'Thread|Core|Socket|^CPU' | awk '{if(NR == 4) print $NF}')
-SOCKETS=$(lscpu | egrep 'Thread|Core|Socket|^CPU' | awk '{if(NR == 5) print $NF}')
+USED_DISK=`df -h --total | grep 'total' | awk '{printf("%d/%sb", $3, $2)}'`
+DISK_USAGE=`df -h --total | grep 'total' | awk '{printf("%s", $(NF - 1))}'`
 
-TOTAL_MEMORY=$(vmstat -s | awk '{if(NR == 1) print$1}')
-USED_MEMORY=$(vmstat -s | awk '{if(NR == 2) print$1}')
-USED_MEMORY_PERCENT=$(expr $USED_MEMORY \* 100 / $TOTAL_MEMORY)
+LVM_USE=`
+	if [ $(lsblk | grep -c 'lvm') -eq 0 ]
+		then
+			echo no
+		else
+			echo yes
+	fi
+`
 
-CPU_IDLE=$(mpstat | awk 'END{print $NF}')
-
-TOTAL_DISK_SIZE=$(df -h --total --output=size| awk 'END{print$NF}')
-USED_DISK_SIZE=$(df -h --total --output=used | awk 'END{print$NF}')
-USED_DISK_PERCENT=$(df -h --total | awk 'END{print$(NF - 1)}')
-
-printf "#Architecture: `uname -a` \n"
-printf "#CPU physical: `nproc` \n"
-printf "#vCPU: `expr $THREADS \* $CORES \* $SOCKETS` \n"
-printf "#Memory Usage: `expr $USED_MEMORY / 1024`/`expr $TOTAL_MEMORY / 1024`MB ($USED_MEMORY_PERCENT%%) \n"
-printf "#Disk Usage: $USED_DISK_SIZE/$TOTAL_DISK_SIZE ($USED_DISK_PERCENT%)\n"
-printf "#CPU Load: `echo 100 - $CPU_IDLE | bc`%% \n"
-printf "#Last Boot: `who -b | awk '{print $(NF - 1), $NF}'` \n"
-printf "#LVM use: yes \n"
-printf "#Connexions TCP: `netstat -ant | grep ESTABLISHED | wc -l` ESTABLISHED \n"
-printf "#User Log: `who | wc -l` \n"
-printf "#Network: IP `hostname -I` (`ip addr | grep link/ether | awk '{print $(NF -2)}'`) \n"
-printf "#Sudo: `cat /var/log/sudo/sudo_logs | grep COMMAND | wc -l` cmd\n"
+wall "	#Architecture: `uname -a`
+	#CPU physical : `grep 'physical id' /proc/cpuinfo | sort -u | wc -l`
+	#vCPU : `lscpu -e | grep -vc 'CPU'`
+	#Memory Usage: $USED_MEM ($MEM_USAGE)
+	#Disk Usage: $USED_DISK ($DISK_USAGE)
+	#CPU load: `mpstat | grep 'all' | awk '{printf("%.1f%%", 100.00 - $NF)}'`
+	#Last boot: `who -b | awk '{printf("%s %s", $3, $4)}'`
+	#LVM use: $LVM_USE
+	#Connections TCP : `ss -t | grep -vc 'State'` ESTABLISHED
+	#User log: users | wc -w
+	#Network: IP `hostname -I` (`ip a | grep 'ether' | awk '{printf("%s", $2)}'`)
+	#Sudo : `grep -c 'PWD=' /var/log/sudo/sudo.log` cmd"
